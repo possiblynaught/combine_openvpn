@@ -55,15 +55,32 @@ fi
 # Create output file template
 sed 's/\#.*//' "$(head -n 1 "$PATHS_FILE")" | sed '/^$/d' | sed '/^remote/d' > "$OUTPUT_CONF"
 # Get remote conf strings
-TEMP_FILE=$(mktemp /tmp/config.XXXXXX || exit 1)
+TEMP_OUTPUT_FILE=$(mktemp /tmp/config.XXXXXX || exit 1)
 while read -r FILE; do
-  grep -F "remote " < "$FILE" >> "$TEMP_FILE"
+  grep -F "remote " < "$FILE" >> "$TEMP_OUTPUT_FILE"
 done < "$PATHS_FILE"
+
 # Sort, remove duplicate, and add remote strings
-sort "$TEMP_FILE" | uniq > "$PATHS_FILE"
-rm -f "$TEMP_FILE"
+sort "$TEMP_OUTPUT_FILE" | uniq > "$PATHS_FILE"
+rm -f "$TEMP_OUTPUT_FILE"
 cat "$OUTPUT_CONF" >> "$PATHS_FILE"
 mv "$PATHS_FILE" "$OUTPUT_CONF"
+
+# Save number of remotes
+NUM_REMOTES=$(grep -cF "remote " < "$OUTPUT_CONF")
+# Make sure it isn't more than 64 remotes (openvpn max)
+if [[ "$NUM_REMOTES" -gt 64 ]]; then
+  # Trim random remotes to achieve 64
+  TRIM_NUM=$((NUM_REMOTES - 64))
+  TEMP_REMOTES=$(mktemp /tmp/config.XXXXXX || exit 1)
+  for i in $( seq 1 ${TRIM_NUM} ); do
+    # Delete a remote line
+    grep -F "remote " < "$OUTPUT_CONF" > "$TEMP_REMOTES"
+    DELETE_LINE=$((RANDOM % $(wc -l < "$TEMP_REMOTES") + 1))
+    sed -i "${DELETE_LINE}d" "$OUTPUT_CONF"
+  done
+  rm -f "$TEMP_REMOTES"
+fi
 
 # Notify of completion
 echo "
@@ -74,5 +91,8 @@ if [ -n "$SEARCH_TERM_1" ] && [ -n "$SEARCH_TERM_2" ]; then
   echo "- Only sourced from configs with '$SEARCH_TERM_1' and '$SEARCH_TERM_2' in name"
 elif [ -n "$SEARCH_TERM_1" ]; then 
   echo "- Only sourced from configs with '$SEARCH_TERM_1' in name"
+fi
+if [[ "$TRIM_NUM" -gt 0 ]]; then 
+  echo "- Randomly trimmed remotes from $NUM_REMOTES to $(grep -cF "remote " < "$OUTPUT_CONF") (openvpn max=64)"
 fi
 echo "--------------------------------------------------------------------------------"

@@ -9,8 +9,8 @@ set -Eeo pipefail
 OUTPUT_CONF="/tmp/combined.ovpn"
 ################################################################################
 
-# Seed random with timestamp
-RANDOM=$(date +%s)
+# Seed random with PID * timestamp
+RANDOM=$(($$ * $(date +%s)))
 
 # Check for passed folder
 INPUT_CONFS="$1"
